@@ -10,106 +10,152 @@
 
 	<munit:config name="lsp-test-suite.xml" />
 
-	<munit:test name="lsp-before-standard" description="LSP before: standard has a numeric totalPrice">
+	<munit:test name="lsp-before-legacy-pending" description="LSP before: legacy provider - pending order can be cancelled">
 		<munit:execution>
 			<munit:set-event doc:name="Input">
-				<munit:payload value="#[output application/json --- {orderId: 'ORD-1', orderType: 'standard', price: 50, quantity: 2}]" mediaType="application/json" />
+				<munit:attributes value="#[{ uriParams: { orderId: 'ORD-1001' }, queryParams: { provider: 'legacy' } }]" />
 			</munit:set-event>
-			<flow-ref doc:name="Run" name="lsp-before-quote-order" />
+			<flow-ref doc:name="Run" name="lsp-before-get-order" />
 		</munit:execution>
 		<munit:validation>
-			<munit-tools:assert-that doc:name="Total" expression="#[payload.totalPrice]" is="#[MunitTools::equalTo(100)]" />
+			<munit-tools:assert-that doc:name="Can cancel" expression="#[payload.canCancel]" is="#[MunitTools::equalTo(true)]" />
+			<munit-tools:assert-that doc:name="Total" expression="#[payload.totalPrice]" is="#[MunitTools::equalTo(120)]" />
 		</munit:validation>
 	</munit:test>
 
-	<munit:test name="lsp-before-express-breaks-contract" description="LSP before: express has no totalPrice (renamed to total)">
+	<munit:test name="lsp-before-new-pending-breaks" description="LSP before: new provider - same order, consumer silently says it cannot be cancelled">
 		<munit:execution>
 			<munit:set-event doc:name="Input">
-				<munit:payload value="#[output application/json --- {orderId: 'ORD-1', orderType: 'express', price: 50, quantity: 2}]" mediaType="application/json" />
+				<munit:attributes value="#[{ uriParams: { orderId: 'ORD-1001' }, queryParams: { provider: 'new' } }]" />
 			</munit:set-event>
-			<flow-ref doc:name="Run" name="lsp-before-quote-order" />
+			<flow-ref doc:name="Run" name="lsp-before-get-order" />
 		</munit:execution>
 		<munit:validation>
-			<munit-tools:assert-that doc:name="No totalPrice" expression="#[payload.totalPrice]" is="#[MunitTools::nullValue()]" />
-			<munit-tools:assert-that doc:name="Renamed field" expression="#[payload.total]" is="#[MunitTools::equalTo(110)]" />
+			<munit-tools:assert-that doc:name="Wrong decision" expression="#[payload.canCancel]" is="#[MunitTools::equalTo(false)]" />
+			<munit-tools:assert-that doc:name="Status vocabulary" expression="#[payload.status]" is="#[MunitTools::equalTo('pending')]" />
+			<munit-tools:assert-that doc:name="Price as text" expression="#[payload.totalPrice]" is="#[MunitTools::equalTo('120.00')]" />
 		</munit:validation>
 	</munit:test>
 
-	<munit:test name="lsp-before-international-breaks-contract" description="LSP before: international returns totalPrice as text">
+	<munit:test name="lsp-before-new-unknown-breaks" description="LSP before: new provider - unknown order returns 200 with empty data instead of 404">
 		<munit:execution>
 			<munit:set-event doc:name="Input">
-				<munit:payload value="#[output application/json --- {orderId: 'ORD-1', orderType: 'international', price: 50, quantity: 2}]" mediaType="application/json" />
+				<munit:attributes value="#[{ uriParams: { orderId: 'ORD-0000' }, queryParams: { provider: 'new' } }]" />
 			</munit:set-event>
-			<flow-ref doc:name="Run" name="lsp-before-quote-order" />
+			<flow-ref doc:name="Run" name="lsp-before-get-order" />
 		</munit:execution>
 		<munit:validation>
-			<munit-tools:assert-that doc:name="Text total" expression="#[payload.totalPrice]" is="#[MunitTools::equalTo('GBP 125.00')]" />
+			<munit-tools:assert-that doc:name="No error status" expression="#[vars.httpStatus]" is="#[MunitTools::nullValue()]" />
+			<munit-tools:assert-that doc:name="Empty order" expression="#[payload.orderId]" is="#[MunitTools::nullValue()]" />
 		</munit:validation>
 	</munit:test>
 
-	<munit:test name="lsp-after-standard" description="LSP after: standard honours the common contract">
+	<munit:test name="lsp-after-legacy-pending" description="LSP after: legacy provider - pending order can be cancelled">
 		<munit:execution>
 			<munit:set-event doc:name="Input">
-				<munit:payload value="#[output application/json --- {orderId: 'ORD-1', orderType: 'standard', price: 50, quantity: 2}]" mediaType="application/json" />
+				<munit:attributes value="#[{ uriParams: { orderId: 'ORD-1001' }, queryParams: { provider: 'legacy' } }]" />
 			</munit:set-event>
-			<flow-ref doc:name="Run" name="lsp-after-quote-order" />
+			<flow-ref doc:name="Run" name="lsp-after-get-order" />
 		</munit:execution>
 		<munit:validation>
-			<munit-tools:assert-that doc:name="Numeric total" expression="#[payload.totalPrice]" is="#[MunitTools::equalTo(100)]" />
-			<munit-tools:assert-that doc:name="Currency" expression="#[payload.currency]" is="#[MunitTools::equalTo('GBP')]" />
-			<munit-tools:assert-that doc:name="Type" expression="#[payload.orderType]" is="#[MunitTools::equalTo('standard')]" />
-			<munit-tools:assert-that doc:name="No extras" expression="#[payload.additionalInfo]" is="#[MunitTools::nullValue()]" />
+			<munit-tools:assert-that doc:name="Can cancel" expression="#[payload.canCancel]" is="#[MunitTools::equalTo(true)]" />
+			<munit-tools:assert-that doc:name="Total" expression="#[payload.totalPrice]" is="#[MunitTools::equalTo(120)]" />
+			<munit-tools:assert-that doc:name="Status" expression="#[payload.status]" is="#[MunitTools::equalTo('PENDING')]" />
 		</munit:validation>
 	</munit:test>
 
-	<munit:test name="lsp-after-express" description="LSP after: express honours the common contract">
+	<munit:test name="lsp-after-legacy-shipped" description="LSP after: legacy provider - shipped order">
 		<munit:execution>
 			<munit:set-event doc:name="Input">
-				<munit:payload value="#[output application/json --- {orderId: 'ORD-1', orderType: 'express', price: 50, quantity: 2}]" mediaType="application/json" />
+				<munit:attributes value="#[{ uriParams: { orderId: 'ORD-1002' }, queryParams: { provider: 'legacy' } }]" />
 			</munit:set-event>
-			<flow-ref doc:name="Run" name="lsp-after-quote-order" />
+			<flow-ref doc:name="Run" name="lsp-after-get-order" />
 		</munit:execution>
 		<munit:validation>
-			<munit-tools:assert-that doc:name="Numeric total" expression="#[payload.totalPrice]" is="#[MunitTools::equalTo(110)]" />
-			<munit-tools:assert-that doc:name="Currency" expression="#[payload.currency]" is="#[MunitTools::equalTo('GBP')]" />
-			<munit-tools:assert-that doc:name="Type" expression="#[payload.orderType]" is="#[MunitTools::equalTo('express')]" />
-			<munit-tools:assert-that doc:name="expressFee" expression="#[payload.additionalInfo.expressFee != null]" is="#[MunitTools::equalTo(true)]" />
+			<munit-tools:assert-that doc:name="Result" expression="#[payload]" is="#[MunitTools::equalTo({orderId: 'ORD-1002', status: 'SHIPPED', totalPrice: 75.5, canCancel: false})]" />
 		</munit:validation>
 	</munit:test>
 
-	<munit:test name="lsp-after-international" description="LSP after: international honours the common contract">
+	<munit:test name="lsp-after-legacy-unknown" description="LSP after: legacy provider - unknown order is 404">
 		<munit:execution>
 			<munit:set-event doc:name="Input">
-				<munit:payload value="#[output application/json --- {orderId: 'ORD-1', orderType: 'international', price: 50, quantity: 2}]" mediaType="application/json" />
+				<munit:attributes value="#[{ uriParams: { orderId: 'ORD-0000' }, queryParams: { provider: 'legacy' } }]" />
 			</munit:set-event>
-			<flow-ref doc:name="Run" name="lsp-after-quote-order" />
+			<flow-ref doc:name="Run" name="lsp-after-get-order" />
 		</munit:execution>
 		<munit:validation>
-			<munit-tools:assert-that doc:name="Numeric total" expression="#[payload.totalPrice]" is="#[MunitTools::equalTo(125)]" />
-			<munit-tools:assert-that doc:name="Currency" expression="#[payload.currency]" is="#[MunitTools::equalTo('GBP')]" />
-			<munit-tools:assert-that doc:name="Type" expression="#[payload.orderType]" is="#[MunitTools::equalTo('international')]" />
-			<munit-tools:assert-that doc:name="customsFee" expression="#[payload.additionalInfo.customsFee != null]" is="#[MunitTools::equalTo(true)]" />
+			<munit-tools:assert-that doc:name="HTTP status" expression="#[vars.httpStatus as Number]" is="#[MunitTools::equalTo(404)]" />
 		</munit:validation>
 	</munit:test>
 
-	<munit:test name="lsp-before-unknown-type" description="LSP before: unknown order type is rejected">
+	<munit:test name="lsp-after-new-pending" description="LSP after: new provider - pending order can be cancelled">
 		<munit:execution>
 			<munit:set-event doc:name="Input">
-				<munit:payload value="#[output application/json --- {orderId: 'ORD-1', orderType: 'drone', price: 50, quantity: 2}]" mediaType="application/json" />
+				<munit:attributes value="#[{ uriParams: { orderId: 'ORD-1001' }, queryParams: { provider: 'new' } }]" />
 			</munit:set-event>
-			<flow-ref doc:name="Run" name="lsp-before-quote-order" />
+			<flow-ref doc:name="Run" name="lsp-after-get-order" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Can cancel" expression="#[payload.canCancel]" is="#[MunitTools::equalTo(true)]" />
+			<munit-tools:assert-that doc:name="Total" expression="#[payload.totalPrice]" is="#[MunitTools::equalTo(120)]" />
+			<munit-tools:assert-that doc:name="Status" expression="#[payload.status]" is="#[MunitTools::equalTo('PENDING')]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="lsp-after-new-shipped" description="LSP after: new provider - shipped order">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:attributes value="#[{ uriParams: { orderId: 'ORD-1002' }, queryParams: { provider: 'new' } }]" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="lsp-after-get-order" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Result" expression="#[payload]" is="#[MunitTools::equalTo({orderId: 'ORD-1002', status: 'SHIPPED', totalPrice: 75.5, canCancel: false})]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="lsp-after-new-unknown" description="LSP after: new provider - unknown order is 404">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:attributes value="#[{ uriParams: { orderId: 'ORD-0000' }, queryParams: { provider: 'new' } }]" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="lsp-after-get-order" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="HTTP status" expression="#[vars.httpStatus as Number]" is="#[MunitTools::equalTo(404)]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="lsp-before-legacy-unknown" description="LSP before: legacy provider - unknown order is 404">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:attributes value="#[{ uriParams: { orderId: 'ORD-0000' }, queryParams: { provider: 'legacy' } }]" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="lsp-before-get-order" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="HTTP status" expression="#[vars.httpStatus as Number]" is="#[MunitTools::equalTo(404)]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="lsp-before-invalid-provider" description="LSP before: unknown provider is rejected">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:attributes value="#[{ uriParams: { orderId: 'ORD-1001' }, queryParams: { provider: 'sap' } }]" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="lsp-before-get-order" />
 		</munit:execution>
 		<munit:validation>
 			<munit-tools:assert-that doc:name="HTTP status" expression="#[vars.httpStatus as Number]" is="#[MunitTools::equalTo(400)]" />
 		</munit:validation>
 	</munit:test>
 
-	<munit:test name="lsp-after-unknown-type" description="LSP after: unknown order type is rejected">
+	<munit:test name="lsp-after-invalid-provider" description="LSP after: unknown provider is rejected">
 		<munit:execution>
 			<munit:set-event doc:name="Input">
-				<munit:payload value="#[output application/json --- {orderId: 'ORD-1', orderType: 'drone', price: 50, quantity: 2}]" mediaType="application/json" />
+				<munit:attributes value="#[{ uriParams: { orderId: 'ORD-1001' }, queryParams: { provider: 'sap' } }]" />
 			</munit:set-event>
-			<flow-ref doc:name="Run" name="lsp-after-quote-order" />
+			<flow-ref doc:name="Run" name="lsp-after-get-order" />
 		</munit:execution>
 		<munit:validation>
 			<munit-tools:assert-that doc:name="HTTP status" expression="#[vars.httpStatus as Number]" is="#[MunitTools::equalTo(400)]" />

@@ -12,7 +12,7 @@ The app needs no external systems: ERPs, databases and payment providers are sim
 |---|---|---|---|---|
 | **S**ingle Responsibility | Process an order | One flow validates, prices and calls the ERP | The flow orchestrates; each step is a focused sub-flow | [SRP](https://brunosouzas.com/blog/single-responsibility-principle-srp-in-mulesoft-structuring-flows-with-focused-responsibilities) |
 | **O**pen/Closed | Take a payment | A choice router that must be edited for every new method | The router looks up the implementation in config; `pix` was added without touching it | [OCP](https://brunosouzas.com/blog/openclosed-principle-ocp-in-mulesoft-apis-and-flows-that-evolve-without-breaking) |
-| **L**iskov Substitution | Quote standard, express and international orders | Each type answers with a different shape | All types honour one contract; extras go in `additionalInfo` | [LSP](https://brunosouzas.com/blog/liskov-substitution-principle-lsp-in-mulesoft-ensuring-consistency-and-substitutability) |
+| **L**iskov Substitution | Read an order from the legacy or the new ERP | The new ERP adapter looks compatible but changes values and error behaviour, so the consumer silently takes wrong decisions | Both adapters honour the whole contract (shape, values, errors) and can replace each other | [LSP](https://brunosouzas.com/blog/liskov-substitution-principle-lsp-in-mulesoft-ensuring-consistency-and-substitutability) |
 | **I**nterface Segregation | Read an order | One endpoint returns everything to everyone, including internal cost data | Mobile and finance each get an interface shaped for their need | [ISP](https://brunosouzas.com/blog/interface-segregation-principle-isp-in-mulesoft-specific-interfaces-for-specific-needs) |
 | **D**ependency Inversion | Read an order and decide if it can be cancelled | The business rule knows the legacy ERP's field names and codes | The rule depends on an "order repository"; in-memory and ERP adapters are swapped in config | [DIP](https://brunosouzas.com/blog/dependency-inversion-principle-dip-in-mulesoft-rely-on-abstractions-not-implementations) |
 
@@ -26,7 +26,7 @@ src/main/mule/
     <principle>-after.xml
 src/main/resources/config/app.yaml   port, OCP payment routing, DIP repository choice
 src/test/munit/<principle>-test-suite.xml
-docs/contracts/          RAML types for the LSP and ISP "after" contracts
+docs/contracts/          RAML types for the LSP and ISP contracts
 requests.http            sample requests for every endpoint
 ```
 
@@ -48,7 +48,7 @@ curl -s -X POST localhost:8081/lsp/before/quotes -H 'Content-Type: application/j
 mvn clean test
 ```
 
-MUnit runs on the Mule Enterprise runtime, so Maven needs access to the MuleSoft Enterprise repository (credentials in `~/.m2/settings.xml`, as in any MuleSoft project). The build fails below 80% application coverage; the current suites cover 32 cases at about 95%.
+MUnit runs on the Mule Enterprise runtime, so Maven needs access to the MuleSoft Enterprise repository (credentials in `~/.m2/settings.xml`, as in any MuleSoft project). The build fails below 80% application coverage; the current suites cover 36 cases at about 95%.
 
 ## Notes
 
