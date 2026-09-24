@@ -8,80 +8,108 @@
 		http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
 		http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
 
+
 	<!--
-		LSP AFTER: every variation honours the same contract (see docs/contracts/lsp-quote-after.raml).
-		totalPrice is always a number in the same currency; what is specific to a variation goes in
-		additionalInfo, which consumers can ignore. Any order type can replace another safely.
+		LSP AFTER: both adapters honour the whole contract - the shape, the value vocabulary (upper-case
+		statuses, numeric price) and the behaviour for unknown orders (APP:NOT_FOUND). The consumer gets the
+		same answer from either provider, so one can replace the other without the consumer noticing.
+		The contract is in docs/contracts/lsp-order-after.raml.
 	-->
-	<flow name="lsp-after-quote-order">
-		<http:listener doc:name="Listener" config-ref="http-listener-config" path="/lsp/after/quotes" allowedMethods="POST">
+	<flow name="lsp-after-get-order">
+		<http:listener doc:name="Listener" config-ref="http-listener-config" path="/lsp/after/orders/{orderId}" allowedMethods="GET">
 			<http:response statusCode="#[vars.httpStatus default 200]" />
 		</http:listener>
-		<choice doc:name="Order type">
-			<when expression="#[payload.orderType == 'standard']">
-				<flow-ref doc:name="Standard" name="lsp-after-quote-standard" />
+		<choice doc:name="Which provider?">
+			<when expression="#[attributes.queryParams.provider == 'legacy']">
+				<flow-ref doc:name="Legacy ERP" name="lsp-after-provider-legacy-erp" />
 			</when>
-			<when expression="#[payload.orderType == 'express']">
-				<flow-ref doc:name="Express" name="lsp-after-quote-express" />
-			</when>
-			<when expression="#[payload.orderType == 'international']">
-				<flow-ref doc:name="International" name="lsp-after-quote-international" />
+			<when expression="#[attributes.queryParams.provider == 'new']">
+				<flow-ref doc:name="New ERP" name="lsp-after-provider-new-erp" />
 			</when>
 			<otherwise>
-				<raise-error type="APP:BAD_REQUEST" description="#['Unknown orderType: ' ++ (payload.orderType default 'none')]" />
+				<raise-error type="APP:BAD_REQUEST" description="provider must be 'legacy' or 'new'" />
 			</otherwise>
 		</choice>
+		<flow-ref doc:name="Business rule" name="lsp-after-summarise-order" />
 	</flow>
 
-	<sub-flow name="lsp-after-quote-standard">
-		<ee:transform doc:name="Standard quote">
+	<!-- The consumer: written against the contract, not against a specific provider. -->
+	<sub-flow name="lsp-after-summarise-order">
+		<ee:transform doc:name="Summarise">
 			<ee:message>
 				<ee:set-payload><![CDATA[%dw 2.0
 output application/json
-var subtotal = payload.price * payload.quantity
+---
+payload ++ { canCancel: payload.status == "PENDING" }]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</sub-flow>
+
+	<!-- Provider 1: legacy ERP adapter. Honours the contract. -->
+	<sub-flow name="lsp-after-provider-legacy-erp">
+		<ee:transform doc:name="Call legacy ERP (simulated)">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var erp = {
+	"ORD-1001": { ORD_NO: "ORD-1001", STS_CD: "P", TOT_AMT: "120.00" },
+	"ORD-1002": { ORD_NO: "ORD-1002", STS_CD: "S", TOT_AMT: "75.50" }
+}
+---
+erp[attributes.uriParams.orderId default ""]]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<choice doc:name="Found?">
+			<when expression="#[payload == null]">
+				<raise-error type="APP:NOT_FOUND" description="Order not found" />
+			</when>
+		</choice>
+		<ee:transform doc:name="To contract">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
 ---
 {
-	orderId: payload.orderId,
-	orderType: "standard",
-	totalPrice: subtotal,
-	currency: "GBP",
-	additionalInfo: null
+	orderId: payload.ORD_NO,
+	status: payload.STS_CD match {
+		case "P" -> "PENDING"
+		case "S" -> "SHIPPED"
+		else -> "UNKNOWN"
+	},
+	totalPrice: payload.TOT_AMT as Number
 }]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>
 	</sub-flow>
 
-	<sub-flow name="lsp-after-quote-express">
-		<ee:transform doc:name="Express quote">
+	<!-- Provider 2 (AFTER): translates the new ERP's vocabulary into the contract, including errors. -->
+	<sub-flow name="lsp-after-provider-new-erp">
+		<ee:transform doc:name="Call new ERP (simulated)">
 			<ee:message>
 				<ee:set-payload><![CDATA[%dw 2.0
 output application/json
-var subtotal = payload.price * payload.quantity
+var erp = {
+	"ORD-1001": { id: "ORD-1001", state: "pending", amount: "120.00" },
+	"ORD-1002": { id: "ORD-1002", state: "shipped", amount: "75.50" }
+}
 ---
-{
-	orderId: payload.orderId,
-	orderType: "express",
-	totalPrice: subtotal + 10,
-	currency: "GBP",
-	additionalInfo: { expressFee: 10 }
-}]]></ee:set-payload>
+erp[attributes.uriParams.orderId default ""]]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>
-	</sub-flow>
-
-	<sub-flow name="lsp-after-quote-international">
-		<ee:transform doc:name="International quote">
+		<choice doc:name="Found?">
+			<when expression="#[payload == null]">
+				<raise-error type="APP:NOT_FOUND" description="Order not found" />
+			</when>
+		</choice>
+		<ee:transform doc:name="To contract">
 			<ee:message>
 				<ee:set-payload><![CDATA[%dw 2.0
 output application/json
-var subtotal = payload.price * payload.quantity
 ---
 {
-	orderId: payload.orderId,
-	orderType: "international",
-	totalPrice: subtotal + 25,
-	currency: "GBP",
-	additionalInfo: { customsFee: 25 }
+	orderId: payload.id,
+	status: upper(payload.state),
+	totalPrice: payload.amount as Number
 }]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>

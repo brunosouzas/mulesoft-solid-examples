@@ -1,0 +1,11 @@
+#%RAML 1.0 DataType
+# LSP: the contract every order provider must honour - shape, values and behaviour.
+# - status uses one vocabulary (upper case), whatever the source system calls it
+# - totalPrice is always a number
+# - an unknown order is a 404 (APP:NOT_FOUND), never an empty 200
+type: object
+properties:
+  orderId: string
+  status:
+    enum: [PENDING, SHIPPED]
+  totalPrice: number

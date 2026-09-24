@@ -13,17 +13,14 @@ Content-Type: application/json
 
 { "orderId": "ORD-1", "amount": 100, "paymentMethod": "pix" }
 
-### LSP — compare the "before" and "after" responses for express orders
-POST {{base}}/lsp/before/quotes
-Content-Type: application/json
-
-{ "orderId": "ORD-1", "orderType": "express", "price": 50, "quantity": 2 }
+### LSP — the same order from two providers. Compare "before" and "after".
+GET {{base}}/lsp/before/orders/ORD-1001?provider=legacy
 
 ###
-POST {{base}}/lsp/after/quotes
-Content-Type: application/json
+GET {{base}}/lsp/before/orders/ORD-1001?provider=new
 
-{ "orderId": "ORD-1", "orderType": "express", "price": 50, "quantity": 2 }
+###
+GET {{base}}/lsp/after/orders/ORD-1001?provider=new
 
 ### ISP
 GET {{base}}/isp/before/orders/ORD-1001
