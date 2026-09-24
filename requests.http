@@ -1,0 +1,38 @@
+# Sample requests (VS Code REST Client / IntelliJ HTTP client). Run the app first.
+@base = http://localhost:8081
+
+### SRP
+POST {{base}}/srp/after/orders
+Content-Type: application/json
+
+{ "orderId": "ORD-1", "price": 50, "quantity": 2 }
+
+### OCP — pix only exists in the "after" version
+POST {{base}}/ocp/after/payments
+Content-Type: application/json
+
+{ "orderId": "ORD-1", "amount": 100, "paymentMethod": "pix" }
+
+### LSP — compare the "before" and "after" responses for express orders
+POST {{base}}/lsp/before/quotes
+Content-Type: application/json
+
+{ "orderId": "ORD-1", "orderType": "express", "price": 50, "quantity": 2 }
+
+###
+POST {{base}}/lsp/after/quotes
+Content-Type: application/json
+
+{ "orderId": "ORD-1", "orderType": "express", "price": 50, "quantity": 2 }
+
+### ISP
+GET {{base}}/isp/before/orders/ORD-1001
+
+###
+GET {{base}}/isp/after/mobile/orders/ORD-1001
+
+###
+GET {{base}}/isp/after/finance/orders/ORD-1001
+
+### DIP
+GET {{base}}/dip/after/orders/ORD-1001

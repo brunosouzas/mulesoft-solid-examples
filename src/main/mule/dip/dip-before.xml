@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+		http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+		http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+
+	<!--
+		DIP BEFORE: the business flow depends directly on a concrete legacy ERP. It knows the ERP's
+		field names (ORD_NO, STS_CD, TOT_AMT) and status codes. Replacing the ERP, or adding a cache,
+		means rewriting the business rule as well. The ERP response is simulated with synthetic data.
+	-->
+	<flow name="dip-before-get-order">
+		<http:listener doc:name="Listener" config-ref="http-listener-config" path="/dip/before/orders/{orderId}" allowedMethods="GET">
+			<http:response statusCode="#[vars.httpStatus default 200]" />
+		</http:listener>
+		<ee:transform doc:name="Call legacy ERP (simulated)">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var erp = {
+	"ORD-1001": { ORD_NO: "ORD-1001", STS_CD: "P", TOT_AMT: "120.00", CRNCY: "GBP" },
+	"ORD-1002": { ORD_NO: "ORD-1002", STS_CD: "S", TOT_AMT: "75.50", CRNCY: "GBP" }
+}
+---
+erp[attributes.uriParams.orderId default ""]]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<choice doc:name="Found?">
+			<when expression="#[payload == null]">
+				<raise-error type="APP:NOT_FOUND" description="Order not found" />
+			</when>
+		</choice>
+		<ee:transform doc:name="Business rule mixed with ERP mapping">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var status = payload.STS_CD match {
+	case "P" -> "PENDING"
+	case "S" -> "SHIPPED"
+	else -> "UNKNOWN"
+}
+---
+{
+	orderId: payload.ORD_NO,
+	status: status,
+	totalPrice: payload.TOT_AMT as Number,
+	canCancel: payload.STS_CD == "P"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+</mule>

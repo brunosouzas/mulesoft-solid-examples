@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+		http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+		http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+
+	<!--
+		ISP AFTER: each consumer gets an interface shaped for its need (experience APIs in API-led
+		terms). Mobile sees tracking data only; finance sees billing only. Internal cost data is not
+		exposed at all, and each contract can evolve independently (see docs/contracts/).
+	-->
+	<flow name="isp-after-get-mobile-order">
+		<http:listener doc:name="Listener" config-ref="http-listener-config" path="/isp/after/mobile/orders/{orderId}" allowedMethods="GET">
+			<http:response statusCode="#[vars.httpStatus default 200]" />
+		</http:listener>
+		<flow-ref doc:name="Load order" name="isp-load-order" />
+		<ee:transform doc:name="Mobile view">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	orderId: payload.orderId,
+	status: payload.status,
+	estimatedDelivery: payload.estimatedDelivery
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+
+	<flow name="isp-after-get-finance-order">
+		<http:listener doc:name="Listener" config-ref="http-listener-config" path="/isp/after/finance/orders/{orderId}" allowedMethods="GET">
+			<http:response statusCode="#[vars.httpStatus default 200]" />
+		</http:listener>
+		<flow-ref doc:name="Load order" name="isp-load-order" />
+		<ee:transform doc:name="Finance view">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	orderId: payload.orderId,
+	invoiceNumber: payload.billing.invoiceNumber,
+	totalPrice: payload.billing.totalPrice,
+	taxAmount: payload.billing.taxAmount,
+	paymentStatus: payload.billing.paymentStatus
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+</mule>

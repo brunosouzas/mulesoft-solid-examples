@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+		http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+		http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+
+	<!--
+		Shared by both versions: a stand-in for the system API that holds the full order record.
+		The data is synthetic.
+	-->
+	<sub-flow name="isp-load-order">
+		<ee:transform doc:name="Find order">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var orders = {
+	"ORD-1001": {
+		orderId: "ORD-1001",
+		status: "SHIPPED",
+		estimatedDelivery: "2026-10-02",
+		customer: { name: "Alex Doe", email: "alex.doe@example.com", phone: "+44 7700 900000" },
+		shippingAddress: { line1: "1 Example Street", city: "London", postcode: "EC1A 1AA" },
+		items: [ { sku: "SKU-1", quantity: 2, unitPrice: 50 } ],
+		billing: { invoiceNumber: "INV-2026-0042", totalPrice: 120, taxAmount: 20, paymentStatus: "PAID" },
+		internal: { costPrice: 70, supplierId: "SUP-9", marginPercent: 41.7 }
+	}
+}
+---
+orders[attributes.uriParams.orderId default ""]]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<choice doc:name="Found?">
+			<when expression="#[payload == null]">
+				<raise-error type="APP:NOT_FOUND" description="Order not found" />
+			</when>
+		</choice>
+	</sub-flow>
+
+	<!--
+		ISP BEFORE: one endpoint returns the whole record to every consumer. The mobile app receives
+		billing and internal cost data it never uses (and should not see), and any change to a field
+		the finance team needs can break the mobile app.
+	-->
+	<flow name="isp-before-get-order">
+		<http:listener doc:name="Listener" config-ref="http-listener-config" path="/isp/before/orders/{orderId}" allowedMethods="GET">
+			<http:response statusCode="#[vars.httpStatus default 200]" />
+		</http:listener>
+		<flow-ref doc:name="Load order" name="isp-load-order" />
+	</flow>
+</mule>

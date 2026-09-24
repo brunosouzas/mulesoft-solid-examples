@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:munit="http://www.mulesoft.org/schema/mule/munit"
+	xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+		http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+		http://www.mulesoft.org/schema/mule/munit-tools http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd">
+
+	<munit:config name="lsp-test-suite.xml" />
+
+	<munit:test name="lsp-before-standard" description="LSP before: standard has a numeric totalPrice">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:payload value="#[output application/json --- {orderId: 'ORD-1', orderType: 'standard', price: 50, quantity: 2}]" mediaType="application/json" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="lsp-before-quote-order" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Total" expression="#[payload.totalPrice]" is="#[MunitTools::equalTo(100)]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="lsp-before-express-breaks-contract" description="LSP before: express has no totalPrice (renamed to total)">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:payload value="#[output application/json --- {orderId: 'ORD-1', orderType: 'express', price: 50, quantity: 2}]" mediaType="application/json" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="lsp-before-quote-order" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="No totalPrice" expression="#[payload.totalPrice]" is="#[MunitTools::nullValue()]" />
+			<munit-tools:assert-that doc:name="Renamed field" expression="#[payload.total]" is="#[MunitTools::equalTo(110)]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="lsp-before-international-breaks-contract" description="LSP before: international returns totalPrice as text">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:payload value="#[output application/json --- {orderId: 'ORD-1', orderType: 'international', price: 50, quantity: 2}]" mediaType="application/json" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="lsp-before-quote-order" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Text total" expression="#[payload.totalPrice]" is="#[MunitTools::equalTo('GBP 125.00')]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="lsp-after-standard" description="LSP after: standard honours the common contract">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:payload value="#[output application/json --- {orderId: 'ORD-1', orderType: 'standard', price: 50, quantity: 2}]" mediaType="application/json" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="lsp-after-quote-order" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Numeric total" expression="#[payload.totalPrice]" is="#[MunitTools::equalTo(100)]" />
+			<munit-tools:assert-that doc:name="Currency" expression="#[payload.currency]" is="#[MunitTools::equalTo('GBP')]" />
+			<munit-tools:assert-that doc:name="Type" expression="#[payload.orderType]" is="#[MunitTools::equalTo('standard')]" />
+			<munit-tools:assert-that doc:name="No extras" expression="#[payload.additionalInfo]" is="#[MunitTools::nullValue()]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="lsp-after-express" description="LSP after: express honours the common contract">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:payload value="#[output application/json --- {orderId: 'ORD-1', orderType: 'express', price: 50, quantity: 2}]" mediaType="application/json" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="lsp-after-quote-order" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Numeric total" expression="#[payload.totalPrice]" is="#[MunitTools::equalTo(110)]" />
+			<munit-tools:assert-that doc:name="Currency" expression="#[payload.currency]" is="#[MunitTools::equalTo('GBP')]" />
+			<munit-tools:assert-that doc:name="Type" expression="#[payload.orderType]" is="#[MunitTools::equalTo('express')]" />
+			<munit-tools:assert-that doc:name="expressFee" expression="#[payload.additionalInfo.expressFee != null]" is="#[MunitTools::equalTo(true)]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="lsp-after-international" description="LSP after: international honours the common contract">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:payload value="#[output application/json --- {orderId: 'ORD-1', orderType: 'international', price: 50, quantity: 2}]" mediaType="application/json" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="lsp-after-quote-order" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Numeric total" expression="#[payload.totalPrice]" is="#[MunitTools::equalTo(125)]" />
+			<munit-tools:assert-that doc:name="Currency" expression="#[payload.currency]" is="#[MunitTools::equalTo('GBP')]" />
+			<munit-tools:assert-that doc:name="Type" expression="#[payload.orderType]" is="#[MunitTools::equalTo('international')]" />
+			<munit-tools:assert-that doc:name="customsFee" expression="#[payload.additionalInfo.customsFee != null]" is="#[MunitTools::equalTo(true)]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="lsp-before-unknown-type" description="LSP before: unknown order type is rejected">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:payload value="#[output application/json --- {orderId: 'ORD-1', orderType: 'drone', price: 50, quantity: 2}]" mediaType="application/json" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="lsp-before-quote-order" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="HTTP status" expression="#[vars.httpStatus as Number]" is="#[MunitTools::equalTo(400)]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="lsp-after-unknown-type" description="LSP after: unknown order type is rejected">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:payload value="#[output application/json --- {orderId: 'ORD-1', orderType: 'drone', price: 50, quantity: 2}]" mediaType="application/json" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="lsp-after-quote-order" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="HTTP status" expression="#[vars.httpStatus as Number]" is="#[MunitTools::equalTo(400)]" />
+		</munit:validation>
+	</munit:test>
+</mule>

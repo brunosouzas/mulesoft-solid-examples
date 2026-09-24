@@ -1,0 +1,15 @@
+#%RAML 1.0 Library
+# ISP after: one interface per consumer instead of one "fat" order resource.
+types:
+  MobileOrder:
+    properties:
+      orderId: string
+      status: string
+      estimatedDelivery: date-only
+  FinanceOrder:
+    properties:
+      orderId: string
+      invoiceNumber: string
+      totalPrice: number
+      taxAmount: number
+      paymentStatus: string

@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:munit="http://www.mulesoft.org/schema/mule/munit"
+	xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+		http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+		http://www.mulesoft.org/schema/mule/munit-tools http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd">
+
+	<munit:config name="dip-test-suite.xml" />
+
+	<munit:test name="dip-before-pending-order" description="DIP before: pending order can be cancelled">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:attributes value="#[{ uriParams: { orderId: 'ORD-1001' } }]" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="dip-before-get-order" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Status" expression="#[payload.status]" is="#[MunitTools::equalTo('PENDING')]" />
+			<munit-tools:assert-that doc:name="Total" expression="#[payload.totalPrice]" is="#[MunitTools::equalTo(120)]" />
+			<munit-tools:assert-that doc:name="Can cancel" expression="#[payload.canCancel]" is="#[MunitTools::equalTo(true)]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="dip-before-unknown-order" description="DIP before: unknown order returns 404">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:attributes value="#[{ uriParams: { orderId: 'ORD-0000' } }]" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="dip-before-get-order" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="HTTP status" expression="#[vars.httpStatus as Number]" is="#[MunitTools::equalTo(404)]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="dip-after-pending-order" description="DIP after: pending order can be cancelled">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:attributes value="#[{ uriParams: { orderId: 'ORD-1001' } }]" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="dip-after-get-order" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Status" expression="#[payload.status]" is="#[MunitTools::equalTo('PENDING')]" />
+			<munit-tools:assert-that doc:name="Total" expression="#[payload.totalPrice]" is="#[MunitTools::equalTo(120)]" />
+			<munit-tools:assert-that doc:name="Can cancel" expression="#[payload.canCancel]" is="#[MunitTools::equalTo(true)]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="dip-after-unknown-order" description="DIP after: unknown order returns 404">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:attributes value="#[{ uriParams: { orderId: 'ORD-0000' } }]" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="dip-after-get-order" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="HTTP status" expression="#[vars.httpStatus as Number]" is="#[MunitTools::equalTo(404)]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="dip-after-legacy-erp-adapter" description="DIP after: the ERP adapter returns the same canonical order">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:attributes value="#[{ uriParams: { orderId: 'ORD-1002' } }]" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="dip-after-order-repository-legacy-erp" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Canonical" expression="#[payload]" is="#[MunitTools::equalTo({orderId: 'ORD-1002', status: 'SHIPPED', totalPrice: 75.5})]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="dip-after-in-memory-repository" description="DIP after: the in-memory repository returns the canonical order">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:attributes value="#[{ uriParams: { orderId: 'ORD-1002' } }]" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="dip-after-order-repository-in-memory" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Canonical" expression="#[payload]" is="#[MunitTools::equalTo({orderId: 'ORD-1002', status: 'SHIPPED', totalPrice: 75.5})]" />
+		</munit:validation>
+	</munit:test>
+</mule>

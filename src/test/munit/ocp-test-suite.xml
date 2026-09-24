@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:munit="http://www.mulesoft.org/schema/mule/munit"
+	xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+		http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+		http://www.mulesoft.org/schema/mule/munit-tools http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd">
+
+	<munit:config name="ocp-test-suite.xml" />
+
+	<!--
+		MUnit only loads flows that are referenced statically. The OCP router picks its target at runtime
+		(dynamic flow-ref), so the implementation flows are referenced here to make sure they are loaded.
+	-->
+	<munit:before-suite name="ocp-load-payment-implementations">
+		<set-payload value="#[output application/java --- {orderId: 'WARM-UP', amount: 0}]" />
+		<flow-ref name="ocp-after-process-credit-card" />
+		<set-payload value="#[output application/java --- {orderId: 'WARM-UP', amount: 0}]" />
+		<flow-ref name="ocp-after-process-bank-slip" />
+		<set-payload value="#[output application/java --- {orderId: 'WARM-UP', amount: 0}]" />
+		<flow-ref name="ocp-after-process-pix" />
+	</munit:before-suite>
+
+	<munit:test name="ocp-before-credit-card" description="OCP before: credit card is authorised">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:payload value="#[output application/json --- {orderId: 'ORD-1', amount: 100, paymentMethod: 'creditCard'}]" mediaType="application/json" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="ocp-before-process-payment" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Method" expression="#[payload.method]" is="#[MunitTools::equalTo('creditCard')]" />
+			<munit-tools:assert-that doc:name="Status" expression="#[payload.status]" is="#[MunitTools::equalTo('AUTHORISED')]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="ocp-before-bank-slip" description="OCP before: bank slip is pending">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:payload value="#[output application/json --- {orderId: 'ORD-1', amount: 100, paymentMethod: 'bankSlip'}]" mediaType="application/json" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="ocp-before-process-payment" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Status" expression="#[payload.status]" is="#[MunitTools::equalTo('PENDING')]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="ocp-before-unsupported" description="OCP before: unknown method is rejected">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:payload value="#[output application/json --- {orderId: 'ORD-1', amount: 100, paymentMethod: 'cash'}]" mediaType="application/json" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="ocp-before-process-payment" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="HTTP status" expression="#[vars.httpStatus as Number]" is="#[MunitTools::equalTo(400)]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="ocp-after-credit-card" description="OCP after: credit card is authorised">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:payload value="#[output application/json --- {orderId: 'ORD-1', amount: 100, paymentMethod: 'creditCard'}]" mediaType="application/json" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="ocp-after-process-payment" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Method" expression="#[payload.method]" is="#[MunitTools::equalTo('creditCard')]" />
+			<munit-tools:assert-that doc:name="Status" expression="#[payload.status]" is="#[MunitTools::equalTo('AUTHORISED')]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="ocp-after-bank-slip" description="OCP after: bank slip is pending">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:payload value="#[output application/json --- {orderId: 'ORD-1', amount: 100, paymentMethod: 'bankSlip'}]" mediaType="application/json" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="ocp-after-process-payment" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Status" expression="#[payload.status]" is="#[MunitTools::equalTo('PENDING')]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="ocp-after-unsupported" description="OCP after: unknown method is rejected">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:payload value="#[output application/json --- {orderId: 'ORD-1', amount: 100, paymentMethod: 'cash'}]" mediaType="application/json" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="ocp-after-process-payment" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="HTTP status" expression="#[vars.httpStatus as Number]" is="#[MunitTools::equalTo(400)]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="ocp-before-pix-not-supported" description="OCP before: pix needs a code change to be supported">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:payload value="#[output application/json --- {orderId: 'ORD-1', amount: 100, paymentMethod: 'pix'}]" mediaType="application/json" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="ocp-before-process-payment" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="HTTP status" expression="#[vars.httpStatus as Number]" is="#[MunitTools::equalTo(400)]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="ocp-after-pix" description="OCP after: pix works with a new flow and a config entry only">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:payload value="#[output application/json --- {orderId: 'ORD-1', amount: 100, paymentMethod: 'pix'}]" mediaType="application/json" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="ocp-after-process-payment" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Method" expression="#[payload.method]" is="#[MunitTools::equalTo('pix')]" />
+			<munit-tools:assert-that doc:name="Payment id" expression="#[payload.paymentId]" is="#[MunitTools::equalTo('PIX-ORD-1')]" />
+		</munit:validation>
+	</munit:test>
+</mule>

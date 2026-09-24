@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+		http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+		http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+
+	<!--
+		OCP AFTER: the router never changes. It looks up the implementation flow for the payment method
+		in config/app.yaml (payment.flow.<method>). Supporting a new method (see pix) means adding one
+		sub-flow and one configuration entry, without touching the code that already works.
+	-->
+	<flow name="ocp-after-process-payment">
+		<http:listener doc:name="Listener" config-ref="http-listener-config" path="/ocp/after/payments" allowedMethods="POST">
+			<http:response statusCode="#[vars.httpStatus default 200]" />
+		</http:listener>
+		<set-variable doc:name="Resolve implementation" variableName="paymentFlow" value="#[output application/java --- p('payment.flow.' ++ (payload.paymentMethod default 'none'))]" />
+		<choice doc:name="Supported?">
+			<when expression="#[isEmpty(vars.paymentFlow)]">
+				<raise-error type="APP:BAD_REQUEST" description="#['Unsupported payment method: ' ++ (payload.paymentMethod default 'none')]" />
+			</when>
+		</choice>
+		<flow-ref doc:name="Process payment" name="#[vars.paymentFlow]" />
+	</flow>
+
+	<sub-flow name="ocp-after-process-credit-card">
+		<ee:transform doc:name="creditCard payment">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	paymentId: "CC-" ++ payload.orderId,
+	method: "creditCard",
+	amount: payload.amount,
+	status: "AUTHORISED"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</sub-flow>
+
+	<sub-flow name="ocp-after-process-bank-slip">
+		<ee:transform doc:name="bankSlip payment">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	paymentId: "BS-" ++ payload.orderId,
+	method: "bankSlip",
+	amount: payload.amount,
+	status: "PENDING"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</sub-flow>
+
+	<!-- Added later: a new payment method with zero changes to the router above. -->
+
+	<sub-flow name="ocp-after-process-pix">
+		<ee:transform doc:name="pix payment">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	paymentId: "PIX-" ++ payload.orderId,
+	method: "pix",
+	amount: payload.amount,
+	status: "AUTHORISED"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</sub-flow>
+</mule>

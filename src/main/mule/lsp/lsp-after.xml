@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+		http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+		http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+
+	<!--
+		LSP AFTER: every variation honours the same contract (see docs/contracts/lsp-quote-after.raml).
+		totalPrice is always a number in the same currency; what is specific to a variation goes in
+		additionalInfo, which consumers can ignore. Any order type can replace another safely.
+	-->
+	<flow name="lsp-after-quote-order">
+		<http:listener doc:name="Listener" config-ref="http-listener-config" path="/lsp/after/quotes" allowedMethods="POST">
+			<http:response statusCode="#[vars.httpStatus default 200]" />
+		</http:listener>
+		<choice doc:name="Order type">
+			<when expression="#[payload.orderType == 'standard']">
+				<flow-ref doc:name="Standard" name="lsp-after-quote-standard" />
+			</when>
+			<when expression="#[payload.orderType == 'express']">
+				<flow-ref doc:name="Express" name="lsp-after-quote-express" />
+			</when>
+			<when expression="#[payload.orderType == 'international']">
+				<flow-ref doc:name="International" name="lsp-after-quote-international" />
+			</when>
+			<otherwise>
+				<raise-error type="APP:BAD_REQUEST" description="#['Unknown orderType: ' ++ (payload.orderType default 'none')]" />
+			</otherwise>
+		</choice>
+	</flow>
+
+	<sub-flow name="lsp-after-quote-standard">
+		<ee:transform doc:name="Standard quote">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var subtotal = payload.price * payload.quantity
+---
+{
+	orderId: payload.orderId,
+	orderType: "standard",
+	totalPrice: subtotal,
+	currency: "GBP",
+	additionalInfo: null
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</sub-flow>
+
+	<sub-flow name="lsp-after-quote-express">
+		<ee:transform doc:name="Express quote">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var subtotal = payload.price * payload.quantity
+---
+{
+	orderId: payload.orderId,
+	orderType: "express",
+	totalPrice: subtotal + 10,
+	currency: "GBP",
+	additionalInfo: { expressFee: 10 }
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</sub-flow>
+
+	<sub-flow name="lsp-after-quote-international">
+		<ee:transform doc:name="International quote">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var subtotal = payload.price * payload.quantity
+---
+{
+	orderId: payload.orderId,
+	orderType: "international",
+	totalPrice: subtotal + 25,
+	currency: "GBP",
+	additionalInfo: { customsFee: 25 }
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</sub-flow>
+</mule>

@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:munit="http://www.mulesoft.org/schema/mule/munit"
+	xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+		http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+		http://www.mulesoft.org/schema/mule/munit-tools http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd">
+
+	<munit:config name="srp-test-suite.xml" />
+
+	<munit:test name="srp-before-valid-order" description="SRP before: prices and sends a valid order">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:payload value="#[output application/json --- {orderId: 'ORD-1', price: 50, quantity: 2}]" mediaType="application/json" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="srp-before-process-order" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Total" expression="#[payload.totalPrice]" is="#[MunitTools::equalTo(100)]" />
+			<munit-tools:assert-that doc:name="ERP reference" expression="#[payload.erpReference]" is="#[MunitTools::equalTo('ERP-ORD-1')]" />
+			<munit-tools:assert-that doc:name="Status" expression="#[payload.status]" is="#[MunitTools::equalTo('SENT_TO_ERP')]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="srp-before-missing-order-id" description="SRP before: rejects an order without orderId">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:payload value="#[output application/json --- {price: 50, quantity: 2}]" mediaType="application/json" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="srp-before-process-order" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="HTTP status" expression="#[vars.httpStatus as Number]" is="#[MunitTools::equalTo(400)]" />
+			<munit-tools:assert-that doc:name="Error" expression="#[payload.error]" is="#[MunitTools::equalTo('orderId is required')]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="srp-before-invalid-quantity" description="SRP before: rejects a zero quantity">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:payload value="#[output application/json --- {orderId: 'ORD-1', price: 50, quantity: 0}]" mediaType="application/json" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="srp-before-process-order" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="HTTP status" expression="#[vars.httpStatus as Number]" is="#[MunitTools::equalTo(400)]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="srp-after-valid-order" description="SRP after: prices and sends a valid order">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:payload value="#[output application/json --- {orderId: 'ORD-1', price: 50, quantity: 2}]" mediaType="application/json" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="srp-after-process-order" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Total" expression="#[payload.totalPrice]" is="#[MunitTools::equalTo(100)]" />
+			<munit-tools:assert-that doc:name="ERP reference" expression="#[payload.erpReference]" is="#[MunitTools::equalTo('ERP-ORD-1')]" />
+			<munit-tools:assert-that doc:name="Status" expression="#[payload.status]" is="#[MunitTools::equalTo('SENT_TO_ERP')]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="srp-after-missing-order-id" description="SRP after: rejects an order without orderId">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:payload value="#[output application/json --- {price: 50, quantity: 2}]" mediaType="application/json" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="srp-after-process-order" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="HTTP status" expression="#[vars.httpStatus as Number]" is="#[MunitTools::equalTo(400)]" />
+			<munit-tools:assert-that doc:name="Error" expression="#[payload.error]" is="#[MunitTools::equalTo('orderId is required')]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="srp-after-invalid-quantity" description="SRP after: rejects a zero quantity">
+		<munit:execution>
+			<munit:set-event doc:name="Input">
+				<munit:payload value="#[output application/json --- {orderId: 'ORD-1', price: 50, quantity: 0}]" mediaType="application/json" />
+			</munit:set-event>
+			<flow-ref doc:name="Run" name="srp-after-process-order" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="HTTP status" expression="#[vars.httpStatus as Number]" is="#[MunitTools::equalTo(400)]" />
+		</munit:validation>
+	</munit:test>
+</mule>

@@ -1,0 +1,14 @@
+http:
+  host: "0.0.0.0"
+  port: "8081"
+
+# OCP: payment method -> implementation flow. Adding a method is a new entry plus a new flow.
+payment:
+  flow:
+    creditCard: "ocp-after-process-credit-card"
+    bankSlip: "ocp-after-process-bank-slip"
+    pix: "ocp-after-process-pix"
+
+# DIP: which implementation of the "order repository" abstraction the app uses.
+orders:
+  repository: "dip-after-order-repository-in-memory"

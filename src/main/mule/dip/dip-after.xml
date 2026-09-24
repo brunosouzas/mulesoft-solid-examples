@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+		http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+		http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+
+	<!--
+		DIP AFTER: the business flow depends on an abstraction, the "order repository", which returns a
+		canonical order { orderId, status, totalPrice }. The implementation is chosen in configuration
+		(orders.repository in config/app.yaml). The ERP adapter keeps every ERP detail; swapping it for
+		the in-memory one, a cache or a new system API does not touch the business rule.
+	-->
+	<flow name="dip-after-get-order">
+		<http:listener doc:name="Listener" config-ref="http-listener-config" path="/dip/after/orders/{orderId}" allowedMethods="GET">
+			<http:response statusCode="#[vars.httpStatus default 200]" />
+		</http:listener>
+		<flow-ref doc:name="Order repository" name="${orders.repository}" />
+		<flow-ref doc:name="Apply business rule" name="dip-after-apply-order-rules" />
+	</flow>
+
+	<!-- Business rule: knows only the canonical order. -->
+	<sub-flow name="dip-after-apply-order-rules">
+		<ee:transform doc:name="Can the order be cancelled?">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload ++ { canCancel: payload.status == "PENDING" }]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</sub-flow>
+
+	<!-- Implementation 1: in-memory repository (default; useful for tests and local runs). -->
+	<sub-flow name="dip-after-order-repository-in-memory">
+		<ee:transform doc:name="Find order">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var orders = {
+	"ORD-1001": { orderId: "ORD-1001", status: "PENDING", totalPrice: 120 },
+	"ORD-1002": { orderId: "ORD-1002", status: "SHIPPED", totalPrice: 75.5 }
+}
+---
+orders[attributes.uriParams.orderId default ""]]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<choice doc:name="Found?">
+			<when expression="#[payload == null]">
+				<raise-error type="APP:NOT_FOUND" description="Order not found" />
+			</when>
+		</choice>
+	</sub-flow>
+
+	<!-- Implementation 2: adapter for the legacy ERP. All ERP knowledge stays here. -->
+	<sub-flow name="dip-after-order-repository-legacy-erp">
+		<ee:transform doc:name="Call legacy ERP (simulated)">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var erp = {
+	"ORD-1001": { ORD_NO: "ORD-1001", STS_CD: "P", TOT_AMT: "120.00", CRNCY: "GBP" },
+	"ORD-1002": { ORD_NO: "ORD-1002", STS_CD: "S", TOT_AMT: "75.50", CRNCY: "GBP" }
+}
+---
+erp[attributes.uriParams.orderId default ""]]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<choice doc:name="Found?">
+			<when expression="#[payload == null]">
+				<raise-error type="APP:NOT_FOUND" description="Order not found" />
+			</when>
+		</choice>
+		<ee:transform doc:name="ERP record to canonical order">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	orderId: payload.ORD_NO,
+	status: payload.STS_CD match {
+		case "P" -> "PENDING"
+		case "S" -> "SHIPPED"
+		else -> "UNKNOWN"
+	},
+	totalPrice: payload.TOT_AMT as Number
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</sub-flow>
+</mule>

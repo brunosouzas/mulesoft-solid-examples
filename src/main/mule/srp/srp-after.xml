@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+		http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+		http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+
+	<!--
+		SRP AFTER: the flow only orchestrates. Validation, pricing and the ERP call each live in a
+		sub-flow with a single reason to change, and each can be tested on its own.
+	-->
+	<flow name="srp-after-process-order">
+		<http:listener doc:name="Listener" config-ref="http-listener-config" path="/srp/after/orders" allowedMethods="POST">
+			<http:response statusCode="#[vars.httpStatus default 200]" />
+		</http:listener>
+		<flow-ref doc:name="Validate order" name="srp-after-validate-order" />
+		<flow-ref doc:name="Calculate total" name="srp-after-calculate-total" />
+		<flow-ref doc:name="Send to ERP" name="srp-after-send-to-erp" />
+	</flow>
+
+	<sub-flow name="srp-after-validate-order">
+		<choice doc:name="Order ID present?">
+			<when expression="#[isEmpty(payload.orderId)]">
+				<raise-error type="APP:BAD_REQUEST" description="orderId is required" />
+			</when>
+		</choice>
+		<choice doc:name="Quantity valid?">
+			<when expression="#[(payload.quantity default 0) &lt;= 0]">
+				<raise-error type="APP:BAD_REQUEST" description="quantity must be greater than zero" />
+			</when>
+		</choice>
+	</sub-flow>
+
+	<sub-flow name="srp-after-calculate-total">
+		<ee:transform doc:name="Calculate total">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	orderId: payload.orderId,
+	totalPrice: payload.price * payload.quantity
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</sub-flow>
+
+	<sub-flow name="srp-after-send-to-erp">
+		<logger level="INFO" doc:name="ERP call (simulated)" message="#['Order ' ++ payload.orderId ++ ' sent to ERP']" />
+		<ee:transform doc:name="ERP acknowledgement">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload ++ {
+	erpReference: "ERP-" ++ payload.orderId,
+	status: "SENT_TO_ERP"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</sub-flow>
+</mule>

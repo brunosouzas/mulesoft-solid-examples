@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+		http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+		http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+
+	<!--
+		SRP BEFORE: one flow validates, prices and sends the order to the ERP.
+		Any change to validation, pricing or the ERP call means editing (and retesting) this whole flow.
+	-->
+	<flow name="srp-before-process-order">
+		<http:listener doc:name="Listener" config-ref="http-listener-config" path="/srp/before/orders" allowedMethods="POST">
+			<http:response statusCode="#[vars.httpStatus default 200]" />
+		</http:listener>
+		<choice doc:name="Order ID present?">
+			<when expression="#[isEmpty(payload.orderId)]">
+				<raise-error type="APP:BAD_REQUEST" description="orderId is required" />
+			</when>
+		</choice>
+		<choice doc:name="Quantity valid?">
+			<when expression="#[(payload.quantity default 0) &lt;= 0]">
+				<raise-error type="APP:BAD_REQUEST" description="quantity must be greater than zero" />
+			</when>
+		</choice>
+		<ee:transform doc:name="Price, send to ERP and build response">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var total = payload.price * payload.quantity
+---
+{
+	orderId: payload.orderId,
+	totalPrice: total,
+	erpReference: "ERP-" ++ payload.orderId,
+	status: "SENT_TO_ERP"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="ERP call (simulated)" message="#['Order ' ++ payload.orderId ++ ' sent to ERP']" />
+	</flow>
+</mule>
